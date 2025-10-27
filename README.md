@@ -85,7 +85,7 @@ Installation
 
 Clone the repository
 
-bashgit clone https://github.com/yourusername/logitrack-ai.git
+bashgit clone https://github.com/ManushPatel08/logitrack.git
 cd logitrack-ai
 
 Create .env file
