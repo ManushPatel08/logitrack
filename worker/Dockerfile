@@ -6,7 +6,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Copy the script
-COPY worker.py .
+COPY . .
 
 # Command to run
 CMD ["python", "worker.py"]

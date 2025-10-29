@@ -1,9 +1,13 @@
-# Environment variables
+# ===============================
+# 🔐 Environment Variables
+# ===============================
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 
-# Python
+# ===============================
+# 🐍 Python
+# ===============================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -13,24 +17,71 @@ env/
 venv/
 ENV/
 *.egg-info/
+*.egg
+*.whl
 
-# Docker
+# ===============================
+# 🐳 Docker
+# ===============================
 *.log
+logs/
+tmp/
+volumes/
+data/
+postgres_data/
+db_data/
 
-# IDE
+# ===============================
+# 🧠 Streamlit
+# ===============================
+.streamlit/
+.streamlit/secrets.toml
+**/.streamlit/secrets.toml
+
+# ===============================
+# 🧪 Tests & Coverage
+# ===============================
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+coverage.xml
+htmlcov/
+
+# ===============================
+# ⚙️ IDE / Editors
+# ===============================
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Database
+# ===============================
+# 💾 Databases
+# ===============================
 *.db
 *.sqlite3
 
-# Secrets
-docs.txt
+# ===============================
+# 🗃️ Secrets
+# ===============================
 secrets/
+docs.txt
+*.pem
+*.key
+*.crt
+
+# ===============================
+# 🧰 Misc / OS
+# ===============================
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+*~
+
+# ===============================
+# 🧩 Project Specific
+# ===============================
+worker/mock_data.py
+

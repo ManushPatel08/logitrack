@@ -1,259 +1,203 @@
-🚢 LogiTrack AI: The Proactive Shipment Analyzer
+# 🚢 LogiTrack AI: The Proactive Shipment Analyzer
 
-An intelligent, real-time shipment tracking and analytics platform powered by AI, providing instant delay detection, predictive insights, and live global tracking.
+An intelligent, real-time shipment tracking and analytics platform. This full-stack application ingests and analyzes global shipment data, providing instant delay detection, predictive insights, and a live tracking dashboard.
 
-🎯 Project Overview
-LogiTrack AI is a full-stack logistics intelligence platform that automatically:
+---
 
-📊 Ingests raw shipment status data from multiple sources
-🤖 Processes and classifies events using AI (Hugging Face BART-MNLI)
-📈 Provides real-time analytics and KPI dashboards
-🗺️ Tracks shipments globally with interactive maps
-⚠️ Identifies at-risk shipments proactively
+## 🎯 Key Features
 
-🏗️ Architecture
-┌─────────────────┐
-│   Streamlit UI  │  ← User Interface (Port 8501)
-│   (Frontend)    │
-└────────┬────────┘
-         │ HTTP
-         ▼
-┌─────────────────┐
-│   FastAPI       │  ← REST API (Port 8000)
-│   (Backend)     │
-└────────┬────────┘
-         │ SQL
-         ▼
-┌─────────────────┐     ┌──────────────┐
-│   PostgreSQL    │◄────┤ Worker (AI)  │
-│   (Database)    │     │ + Data Ingest│
-└─────────────────┘     └──────────────┘
-                              │
-                              ▼
-                        Hugging Face API
-🛠️ Tech Stack
-Backend:
+- **Real-Time Analytics:** A "Mission Control" dashboard with live KPIs for active, at-risk, and on-track shipments.  
+- **Interactive Global Map:** Visualizes the most recent location of active shipments, color-coded by status.  
+- **AI-Powered Classification:** (Real Mode) Uses a Hugging Face model (BART-MNLI) for zero-shot classification of raw status text to determine shipment status and delay reasons.  
+- **Delay Analysis:** Dynamically generated charts showing breakdowns of delay reasons (Weather, Customs, Port Congestion, etc.).  
+- **At-Risk Alerts:** A table isolating shipments classified as **Delayed** for immediate attention.  
+- **Dockerized Services:** PostgreSQL, FastAPI backend, Streamlit frontend, and a Python worker orchestrated with Docker Compose.
 
-FastAPI (Python web framework)
-SQLModel (ORM)
-PostgreSQL (Database)
+---
 
-Frontend:
+## 🏗️ Architecture (High Level)
 
-Streamlit (Dashboard UI)
-Plotly (Interactive charts & maps)
-Pandas (Data processing)
+Streamlit UI (frontend, :8501) <--HTTP--> FastAPI Backend (:8000) <--SQL--> PostgreSQL (db)
+^
+|
+Worker (AI / ingest)
+|
+(Hugging Face API - optional)
 
-AI/ML:
+yaml
+Copy code
 
-Hugging Face Transformers (BART-MNLI)
-Zero-shot text classification
+---
 
-Infrastructure:
+## 🛠️ Tech Stack
 
-Docker & Docker Compose
-Python 3.10
+- **Backend:** FastAPI (Python), SQLModel  
+- **Frontend:** Streamlit, Plotly, Pandas  
+- **Database:** PostgreSQL  
+- **AI/ML:** Hugging Face Transformers (optional, Real Mode)  
+- **Infrastructure:** Docker & Docker Compose
 
-📁 Project Structure
+---
+
+## 📁 Project Structure
+
 LogiTrackProject/
 ├── backend/
-│   ├── main.py              # FastAPI app & endpoints
-│   ├── models.py            # Database models
-│   ├── database.py          # DB connection
-│   ├── requirements.txt
-│   └── Dockerfile
+│ ├── main.py # FastAPI app & endpoints
+│ ├── models.py # Database models (SQLModel)
+│ ├── database.py # Database connection logic
+│ ├── requirements.txt
+│ └── Dockerfile
 ├── frontend/
-│   ├── app.py               # Streamlit dashboard
-│   ├── requirements.txt
-│   └── Dockerfile
+│ ├── app.py # Streamlit dashboard code
+│ ├── requirements.txt
+│ └── Dockerfile
 ├── worker/
-│   ├── worker.py            # Data ingestion + AI processing
-│   ├── requirements.txt
-│   └── Dockerfile
-├── docker-compose.yml       # Orchestration
-├── setup.sql                # Database schema
-├── .env                     # Environment variables
+│ ├── worker.py # Data ingestion worker (real or mock)
+│ ├── seed_database.py # Script to pre-load mock data
+│ ├── mock_data.py # Pre-processed mock events
+│ ├── requirements.txt
+│ └── Dockerfile
+├── docker-compose.yml # Orchestrates all services
+├── setup.sql # Database schema
+├── .env.example # Example environment file (placeholders)
+├── .gitignore
+├── generate_mock_data.py # Utility to create mock_data.py
 └── README.md
-🚀 Quick Start
-Prerequisites
 
-Docker Desktop installed
-Git
-8GB RAM minimum
+yaml
+Copy code
 
-Installation
+---
 
-Clone the repository
+## 🚀 Quick Start
 
-bashgit clone https://github.com/yourusername/logitrack-ai.git
-cd logitrack-ai
+### 1. Prerequisites
 
-Create .env file
+- [Docker Desktop](https://www.docker.com/products/docker-desktop)
+- [Git](https://git-scm.com/)
 
-bash# Copy the example
-cp .env.example .env
+### 2. Clone & Setup Environment
 
-# Edit with your API keys
-nano .env
+```bash
+# Clone the repository
+git clone https://github.com/ManushPatel08/logitrack.git
+cd logitrack
 
-Start the application
+# Copy the example env file
+cp .env.example .env   # or use: copy .env.example .env (Windows)
+IMPORTANT: Do not commit your local .env to version control. It’s already listed in .gitignore.
 
-bash# Build and start all services
-docker-compose up --build
+Open .env and replace the placeholders with your own secrets.
 
-# Or run in detached mode
-docker-compose up -d
+3. Build & Start All Services
+bash
+Copy code
+docker-compose up --build -d
+4. Initialize the Database Schema
+Run once to create tables.
 
-Initialize the database (first time only)
+macOS / Linux:
 
-bashdocker exec -i logitrack_db psql -U admin -d logitrack < setup.sql
+bash
+Copy code
+docker exec -i logitrack_db psql -U <POSTGRES_USER> -d <POSTGRES_DB> < setup.sql
+Windows PowerShell:
 
-Access the dashboard
+powershell
+Copy code
+Get-Content setup.sql | docker exec -i logitrack_db psql -U <POSTGRES_USER> -d <POSTGRES_DB>
 
+5. Seed the Database with Mock Data
+bash
+Copy code
+docker-compose run --rm worker python seed_database.py
+This clears any existing data and populates the database with mock events.
 
-Frontend UI: http://localhost:8501
-API Documentation: http://localhost:8000/docs
-Database: localhost:5433
+6. Access the Application
+Frontend Dashboard: http://localhost:8501
 
-📊 Features
-1. Real-Time Analytics Dashboard
+API Docs (FastAPI): http://localhost:8000/docs
 
-Total active shipments
-Delay percentage and count
-On-time delivery metrics
-Total delay incidents
+Database (local access): localhost:5433 (User: from .env)
 
-2. Interactive Global Map
+The worker service will continue inserting a new random event every ~30 seconds.
 
-Live shipment locations worldwide
-Color-coded status indicators
-Hover tooltips with detailed info
-Filter by status or tracking ID
+🤖 Data & AI Modes
+Controlled by USE_REAL_API in your .env:
 
-3. Delay Analysis
+USE_REAL_API=false (default):
 
-Bar chart of delay reasons
-Breakdown by: Weather, Customs, Port Congestion
-Historical trend tracking
+Runs in Mock Mode using preloaded data (no external API calls).
 
-4. Status Distribution
+USE_REAL_API=true:
 
-Pie chart visualization
-Categories: On Time, Delayed, Delivered
-Percentage calculations
+Runs in Real Mode using live data sources and Hugging Face API for classification.
 
-5. At-Risk Shipment Alerts
+Requires a valid Hugging Face API key in .env.
 
-Real-time identification
-Tracking ID, origin, destination
-Sortable and filterable table
+📦 Re-generate Mock Data
+bash
+Copy code
+# Generate new mock_data.py
+python generate_mock_data.py > worker/mock_data.py
 
-🔌 API Endpoints
-Health Check
-GET /health
-GET /health/db
-Analytics
-GET /api/v1/kpi/delay_reasons
-Response: [{"ai_reason": "Weather Delay", "count": 5}, ...]
-Shipments
-GET /api/v1/shipments/at_risk
-Response: [{"id": 1, "tracking_id": "TRK123", ...}, ...]
+# Rebuild the worker image
+docker-compose build worker
 
-GET /api/v1/shipments/live_locations
-Response: [{"tracking_id": "TRK123", "lat": 40.7, "lon": -74.0, ...}, ...]
-🤖 AI Processing
-The worker service uses zero-shot classification with BART-MNLI to categorize raw status text:
-Input: "Vessel delayed at port due to congestion"
-Output:
-
-Status: Delayed
-Reason: Port Congestion
-
-Categories:
-
-On Time
-Delayed (Weather Delay, Customs Issue, Port Congestion)
-Delivered
-
-🗄️ Database Schema
-sqlshipments
-- id (PK)
-- tracking_id (unique)
-- origin
-- destination
-- created_at
-
-shipment_events
-- id (PK)
-- shipment_id (FK)
-- timestamp
-- location
-- raw_status_text
-- ai_status (AI-generated)
-- ai_reason (AI-generated)
-- latitude
-- longitude
-🔧 Configuration
-Environment Variables
-VariableDescriptionDefaultPOSTGRES_USERDatabase usernameadminPOSTGRES_PASSWORDDatabase passwordsecretPOSTGRES_DBDatabase namelogitrackPOSTGRES_HOSTDatabase hostdbHF_API_KEYHugging Face API keyRequiredAPI_URLBackend API URLhttp://backend:8000
-📈 Development Roadmap
-
- Database schema design
- Data ingestion worker
- AI classification pipeline
- REST API endpoints
- Interactive dashboard
- Global map visualization
- User authentication
- Email alerts for delays
- Predictive ETA calculations
- Multi-carrier integration
- Mobile app
-
-🧪 Testing
-bash# Test backend API
+# Re-seed database
+docker-compose run --rm worker python seed_database.py
+🧪 Testing & Logs
+bash
+Copy code
+# Test backend API health
 curl http://localhost:8000/health
 
-# Test database connection
-docker exec -it logitrack_db psql -U admin -d logitrack -c "SELECT COUNT(*) FROM shipments;"
+# View logs for any service
+docker-compose logs -f worker
+🔧 Environment Variables (.env.example)
+Never commit your .env file. Use this template instead:
 
-# View worker logs
-docker logs logitrack-worker-1
-🐛 Troubleshooting
-Worker not processing data?
-bash# Check worker logs
-docker logs logitrack-worker-1 -f
+env
+Copy code
+# ===== Database =====
+POSTGRES_USER=<POSTGRES_USER_PLACEHOLDER>
+POSTGRES_PASSWORD=<POSTGRES_PASSWORD_PLACEHOLDER>
+POSTGRES_DB=<POSTGRES_DB_PLACEHOLDER>
+POSTGRES_HOST=db
 
-# Restart worker
-docker-compose restart worker
-Database connection failed?
-bash# Check if DB is running
-docker ps | grep postgres
+# ===== API & AI =====
+HF_API_KEY=<HUGGING_FACE_API_KEY_PLACEHOLDER>     # Required if USE_REAL_API=true
+API_URL=http://backend:8000
 
-# Access database directly
-docker exec -it logitrack_db psql -U admin -d logitrack
-Frontend not loading?
-bash# Check frontend logs
-docker logs logitrack-frontend-1
+# ===== Modes & 3rd-party =====
+USE_REAL_API=false
+USE_MARINETRAFFIC_API=false
+MARINETRAFFIC_API_KEY=<MARINETRAFFIC_API_KEY_PLACEHOLDER>
 
-# Rebuild frontend
-docker-compose up --build frontend
-📝 License
-MIT License - see LICENSE file for details
+# ===== Ports (optional) =====
+# FRONTEND_PORT=8501
+# BACKEND_PORT=8000
+# POSTGRES_PORT=5433
+🔐 Security Best Practices
+Never commit real credentials or .env files to Git.
+
+Use Docker secrets, Vault, or CI/CD secret stores for production.
+
+Use least-privilege DB users and rotate passwords/API keys regularly.
+
+Avoid exposing DB ports publicly unless necessary.
+
 👨‍💻 Author
-Your Name
-
+Manush Patel
 GitHub: ManushPatel08
-LinkedIn: www.linkedin.com/in/manush-patel08
+LinkedIn: linkedin.com/in/manush-patel08
 
 🙏 Acknowledgments
+Hugging Face (BART-MNLI model)
 
-Hugging Face for the BART-MNLI model
-FastAPI framework
-Streamlit community
-PostgreSQL team
+FastAPI
 
+Streamlit
 
-🌟 Support
-⭐ Star this repo if you find it useful!
-📧 Questions? Open an issue or contact me directly.
+PostgreSQL

@@ -24,6 +24,8 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - HF_API_KEY=${HF_API_KEY}
+      - AFTERSHIP_API_KEY=${AFTERSHIP_API_KEY}
+      - USE_REAL_API=${USE_REAL_API}
     env_file:
       - .env
     restart: unless-stopped
