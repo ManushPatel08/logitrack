@@ -41,35 +41,6 @@ services:
       - key: LC_ALL
         value: C.UTF-8
 
-  # The Python Worker
-  - type: worker
-    name: logitrack-worker
-    plan: free
-    runtime: docker
-    dockerContext: ./worker
-    dockerfilePath: ./worker/Dockerfile
-    envVars:
-      - key: POSTGRES_HOST
-        fromDatabase:
-          name: logitrack-db
-          property: host
-      - key: POSTGRES_USER
-        fromDatabase:
-          name: logitrack-db
-          property: user
-      - key: POSTGRES_PASSWORD
-        fromDatabase:
-          name: logitrack-db
-          property: password
-      - key: POSTGRES_DB
-        fromDatabase:
-          name: logitrack-db
-          property: database
-      - key: USE_REAL_API
-        value: false
-      - key: HF_API_KEY
-        sync: false # This tells Render to ask for this secret key
-
 # 2. Define the database separately at the top level
 databases:
   - name: logitrack-db
