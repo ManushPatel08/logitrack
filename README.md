@@ -72,7 +72,12 @@ Copy code
 
 ## 🚀 Quick Start
 
+<<<<<<< HEAD
 ### 1. Prerequisites
+=======
+bashgit clone https://github.com/ManushPatel08/logitrack.git
+cd logitrack-ai
+>>>>>>> 2ef0eecaf108621d0617e16498bad760ad542315
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
 - [Git](https://git-scm.com/)
