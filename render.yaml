@@ -5,8 +5,8 @@ services:
     name: logitrack-backend
     plan: free
     runtime: docker
-    dockerContext: ./backend
-    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .                  # <-- CHANGED
+    dockerfilePath: backend/Dockerfile  # <-- CHANGED
     envVars:
       - key: POSTGRES_HOST
         fromDatabase:
@@ -30,8 +30,8 @@ services:
     name: logitrack-frontend
     plan: free
     runtime: docker
-    dockerContext: ./frontend
-    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: .                  # <-- CHANGED
+    dockerfilePath: frontend/Dockerfile # <-- CHANGED
     envVars:
       - key: API_URL
         # This automatically uses the URL of your deployed backend

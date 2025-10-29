@@ -2,11 +2,11 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Copy requirements and install
-COPY requirements.txt .
+COPY frontend/requirements.txt .  # <-- CHANGED
 RUN pip install -r requirements.txt
 
 # Copy the Streamlit app code
-COPY app.py .
+COPY frontend/app.py .            # <-- CHANGED
 
 # Expose the port Streamlit runs on (default 8501)
 EXPOSE 8501

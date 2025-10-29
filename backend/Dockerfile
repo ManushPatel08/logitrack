@@ -2,16 +2,24 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Copy requirements and install
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install -r requirements.txt
 
-# Copy all backend code into the container
-COPY . .
+# Copy all backend code
+COPY backend/ .
 
-COPY ../worker/seed_database.py .
-COPY ../worker/mock_data.py .
+# --- NEW STEPS ---
+# 1. Copy the script that GENERATES the data
+COPY generate_mock_data.py .
 
-# Run the API server using Uvicorn
-# --host 0.0.0.0 makes it accessible from outside the container
-# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# 2. Copy the script that SEEDS the data
+COPY worker/seed_database.py .
+ 
+# 3. RUN the generator to create the mock_data.py file
+# This file will now exist inside the container at /app/mock_data.py
+RUN python generate_mock_data.py > mock_data.py
+# --- END NEW STEPS ---
+
+# 4. The CMD can now run.
+# seed_database.py will run from /app and import mock_data (from /app/mock_data.py)
 CMD sh -c "python seed_database.py && uvicorn main:app --host 0.0.0.0 --port 8000"
