@@ -1,13 +1,6 @@
+# 1. Define all services (web, workers)
 services:
-  # 1. The PostgreSQL Database
-  - type: web
-    name: logitrack-db
-    plan: free
-    databaseName: logitrack
-    user: admin
-    # Render will automatically generate a secure password and inject it
-
-  # 2. The FastAPI Backend
+  # The FastAPI Backend
   - type: web
     name: logitrack-backend
     plan: free
@@ -32,7 +25,7 @@ services:
           name: logitrack-db
           property: database
 
-  # 3. The Streamlit Frontend
+  # The Streamlit Frontend
   - type: web
     name: logitrack-frontend
     plan: free
@@ -48,7 +41,7 @@ services:
       - key: LC_ALL
         value: C.UTF-8
 
-  # 4. The Python Worker
+  # The Python Worker
   - type: worker
     name: logitrack-worker
     plan: free
@@ -75,4 +68,11 @@ services:
       - key: USE_REAL_API
         value: false
       - key: HF_API_KEY
-        sync: false 
+        sync: false # This tells Render to ask for this secret key
+
+# 2. Define the database separately at the top level
+databases:
+  - name: logitrack-db
+    plan: free
+    databaseName: logitrack
+    user: admin
