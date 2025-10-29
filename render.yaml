@@ -1,0 +1,78 @@
+services:
+  # 1. The PostgreSQL Database
+  - type: psql
+    name: logitrack-db
+    plan: free
+    databaseName: logitrack
+    user: admin
+    # Render will automatically generate a secure password and inject it
+
+  # 2. The FastAPI Backend
+  - type: web
+    name: logitrack-backend
+    plan: free
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    envVars:
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: logitrack-db
+          property: host
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: logitrack-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: logitrack-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: logitrack-db
+          property: database
+
+  # 3. The Streamlit Frontend
+  - type: web
+    name: logitrack-frontend
+    plan: free
+    runtime: docker
+    dockerContext: ./frontend
+    dockerfilePath: ./frontend/Dockerfile
+    envVars:
+      - key: API_URL
+        # This automatically uses the URL of your deployed backend
+        value: ${logitrack-backend.url} 
+      - key: LANG
+        value: C.UTF-8
+      - key: LC_ALL
+        value: C.UTF-8
+
+  # 4. The Python Worker
+  - type: worker
+    name: logitrack-worker
+    plan: free
+    runtime: docker
+    dockerContext: ./worker
+    dockerfilePath: ./worker/Dockerfile
+    envVars:
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: logitrack-db
+          property: host
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: logitrack-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: logitrack-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: logitrack-db
+          property: database
+      - key: USE_REAL_API
+        value: false
+      - key: HF_API_KEY
+        sync: false 
