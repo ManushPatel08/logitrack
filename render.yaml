@@ -7,8 +7,6 @@ services:
     runtime: docker
     dockerContext: ./backend
     dockerfilePath: ./backend/Dockerfile
-    # This command runs the seed script first, then starts the API
-    startCommand: "python seed_database.py && uvicorn main:app --host 0.0.0.0 --port 8000"
     envVars:
       - key: POSTGRES_HOST
         fromDatabase:
