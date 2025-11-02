@@ -1,10 +1,10 @@
 # 1. Define all services (web, workers)
 services:
   # The FastAPI Backend
-  - type: web
+  - type:  web
     name: logitrack-backend
     plan: free
-    runtime: docker
+    runtime: docker 
     dockerContext: .                  # <-- CHANGED
     dockerfilePath: backend/Dockerfile  # <-- CHANGED
     envVars:

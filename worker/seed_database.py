@@ -12,7 +12,8 @@ from mock_data import ALL_MOCK_EVENTS
 DB_NAME = os.environ.get("POSTGRES_DB")
 DB_USER = os.environ.get("POSTGRES_USER")
 DB_PASS = os.environ.get("POSTGRES_PASSWORD")
-DB_HOST = "db"
+DB_HOST = os.environ.get("POSTGRES_HOST")
+DB_PORT = os.environ.get("POSTGRES_PORT", "5432")
 
 def get_db_connection():
     """Helper function to connect to the DB."""
@@ -20,7 +21,11 @@ def get_db_connection():
     while not conn:
         try:
             conn = psycopg2.connect(
-                dbname=DB_NAME, user=DB_USER, password=DB_PASS, host=DB_HOST, port="5432"
+                dbname=DB_NAME,
+                user=DB_USER,
+                password=DB_PASS,
+                host=DB_HOST,
+                port=DB_PORT,
             )
             print("Database connection successful!")
             return conn

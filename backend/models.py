@@ -34,7 +34,10 @@ class ShipmentLiveLocation(SQLModel):
     shipment_id: int
     tracking_id: str
     location: Optional[str] = None
-    ai_status: Optional[str] = None
+    # Back-compat: ai_status is kept but we also expose both fields below
+    ai_status: Optional[str] = None  # shown in UI; will mirror ai_text
+    ai_text: Optional[str] = None    # human-friendly paraphrase
+    ai_category: Optional[str] = None  # categorical label used for KPIs/colors
     timestamp: Optional[datetime.datetime] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None

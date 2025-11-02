@@ -1,15 +1,17 @@
+name: logitrack
+
 services:
   db:
     image: postgres:15-alpine
-    container_name: logitrack_db
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./setup.sql:/docker-entrypoint-initdb.d/setup.sql:ro
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     env_file:
       - .env
 
@@ -18,30 +20,42 @@ services:
       context: ./worker
     depends_on:
       - db
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - HF_API_KEY=${HF_API_KEY}
-      - AFTERSHIP_API_KEY=${AFTERSHIP_API_KEY}
-      - USE_REAL_API=${USE_REAL_API}
     env_file:
       - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      HF_API_KEY: ${HF_API_KEY}
+      USE_AIS_API: ${USE_AIS_API}
+      AISSTREAM_MODE: ${AISSTREAM_MODE}
+      AISSTREAM_REQUEST_TEMPLATE: ${AISSTREAM_REQUEST_TEMPLATE}
+      AISSTREAM_API_KEY: ${AISSTREAM_API_KEY}
+      AISSTREAM_AUTH_HEADER: ${AISSTREAM_AUTH_HEADER}
+      AIS_MMSI_LIST: ${AIS_MMSI_LIST}
+      AISSTREAM_POLL_INTERVAL_SECONDS: ${AISSTREAM_POLL_INTERVAL_SECONDS}
+      AISSTREAM_WS_URL: ${AISSTREAM_WS_URL}
+      AISSTREAM_WS_API_KEY: ${AISSTREAM_WS_API_KEY}
+      AISSTREAM_WS_BOUNDING_BOXES: ${AISSTREAM_WS_BOUNDING_BOXES}
+      AISSTREAM_FILTER_MESSAGE_TYPES: ${AISSTREAM_FILTER_MESSAGE_TYPES}
+      AISSTREAM_WS_SUBSCRIBE_JSON: ${AISSTREAM_WS_SUBSCRIBE_JSON}
+      AISSTREAM_WS_RECEIVE_SECONDS: ${AISSTREAM_WS_RECEIVE_SECONDS}
+      MOCK_EVENT_INTERVAL_SECONDS: ${MOCK_EVENT_INTERVAL_SECONDS}
     restart: unless-stopped
 
   backend:
     build:
       context: ./backend
     ports:
-      - "8000:8000"
+      - "8001:8000"
     depends_on:
       - db
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=${POSTGRES_HOST}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: ${POSTGRES_HOST}
     env_file:
       - .env
     restart: unless-stopped
@@ -54,9 +68,9 @@ services:
     depends_on:
       - backend
     environment:
-      - API_URL=${API_URL}
-      - LANG=C.UTF-8
-      - LC_ALL=C.UTF-8
+      API_URL: ${API_URL}
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
     env_file:
       - .env
     restart: unless-stopped

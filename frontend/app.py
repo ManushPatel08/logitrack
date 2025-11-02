@@ -16,8 +16,12 @@ except ImportError:
 warnings.filterwarnings("ignore")
 
 # --- Configuration ---
-API_URL = os.environ.get("API_URL", "http://localhost:8000") # Get API URL from environment or default
-REFRESH_SEC = 15 # Auto-refresh interval
+API_URL = os.environ.get("API_URL", "http://localhost:8000")  # Get API URL from environment or default
+# Allow a higher API timeout to handle large responses; configurable via env
+API_TIMEOUT_SEC = int(os.environ.get("API_TIMEOUT", "60"))
+# Limit how many points we request/plot to keep UI responsive
+MAX_POINTS = int(os.environ.get("MAX_POINTS", "1000"))
+REFRESH_SEC = 15  # Auto-refresh interval
 
 # --------------------- Page Setup & Styling ---------------------
 st.set_page_config(
@@ -139,11 +143,36 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# --------------------- Auto Refresh Logic ---------------------
-colR1, colR2 = st.columns([4, 1]) # Adjust column ratio
-with colR1:
-    st.caption("") # Placeholder to align button if needed
-with colR2:
+# --------------------- Auto Refresh + Quick Controls ---------------------
+# Quick controls row: [spacer | point limit | refresh]
+qc1, qc2, qc3 = st.columns([5, 3, 2])
+with qc1:
+    st.caption("")  # spacer
+with qc2:
+    current_limit = int(st.session_state.get("points_limit", MAX_POINTS))
+
+    # Callback to apply limit when pressing Enter in the number input
+    def _apply_header_limit():
+        try:
+            st.session_state["points_limit"] = int(st.session_state.get("limit_header_input", current_limit))
+        except Exception:
+            st.session_state["points_limit"] = current_limit
+        st.rerun()
+
+    new_limit_hdr = st.number_input(
+        "Max points (quick)",
+        min_value=100,
+        max_value=35000,
+        step=100,
+        value=current_limit,
+        key="limit_header_input",
+        help="Visible and handy here; same as the sidebar control.",
+        on_change=_apply_header_limit,
+    )
+    if st.button("Apply", key="apply_limit_header"):
+        st.session_state["points_limit"] = int(new_limit_hdr)
+        st.rerun()
+with qc3:
     if st.button("🔄 Refresh Now"):
         st.rerun()
     st.caption(f"Auto-refresh in {REFRESH_SEC}s")
@@ -155,6 +184,23 @@ if time.time() - st.session_state.last_refresh >= REFRESH_SEC:
     st.session_state.last_refresh = time.time()
     st.rerun()
 
+# --------------------- Sidebar: Display Settings ---------------------
+with st.sidebar:
+    st.markdown("### ⚙️ Display Settings")
+    # Use session to store the active limit; default to env MAX_POINTS
+    current_limit = int(st.session_state.get("points_limit", MAX_POINTS))
+    new_limit = st.number_input(
+        "Max points to display",
+        min_value=100,
+        max_value=35000,
+        step=100,
+        value=current_limit,
+        help="Smaller numbers load and render faster."
+    )
+    if st.button("Apply point limit"):
+        st.session_state["points_limit"] = int(new_limit)
+        st.rerun()
+
 # --------------------- Header ---------------------
 st.markdown("## 🚢 LogiTrack AI")
 st.markdown(
@@ -164,13 +210,20 @@ st.markdown(
 )
 
 # --------------------- Fetch Data from Backend API ---------------------
-@st.cache_data(ttl=REFRESH_SEC - 5) # Cache data briefly
+@st.cache_data(ttl=REFRESH_SEC - 5)  # Cache data briefly
 def fetch_json(path: str):
     """Fetches JSON data from the API endpoint."""
     try:
-        r = requests.get(f"{API_URL}{path}", timeout=10) # Shorter timeout
+        r = requests.get(f"{API_URL}{path}", timeout=API_TIMEOUT_SEC)
         r.raise_for_status() # Raise error for bad status codes
         return r.json()
+    except requests.exceptions.ReadTimeout as e:
+        st.error(
+            f"❌ API request timed out after {API_TIMEOUT_SEC}s: {e}. "
+            "Try increasing API_TIMEOUT or reducing response size."
+        )
+        st.info(f"Attempted URL: {API_URL}{path}")
+        return None
     except requests.exceptions.RequestException as e:
         st.error(f"❌ Could not connect to API: {e}")
         st.info(f"Attempted URL: {API_URL}{path}")
@@ -179,7 +232,8 @@ def fetch_json(path: str):
 # Fetch all data points
 kpi_data = fetch_json("/api/v1/kpi/delay_reasons")
 at_risk_data = fetch_json("/api/v1/shipments/at_risk")
-live_data = fetch_json("/api/v1/shipments/live_locations")
+active_limit = int(st.session_state.get("points_limit", MAX_POINTS))
+live_data = fetch_json(f"/api/v1/shipments/live_locations?limit={active_limit}")
 
 # Stop execution if essential data failed to load
 if live_data is None or at_risk_data is None or kpi_data is None:
@@ -190,10 +244,22 @@ if live_data is None or at_risk_data is None or kpi_data is None:
 # --------------------- Key Performance Indicators (KPIs) ---------------------
 st.markdown("### 📊 Mission Control")
 
-# Calculate KPIs safely, handling potential empty data
+# Calculate KPIs from the same cohort (live_data) to avoid mismatches
 total_shipments = len(live_data)
-delayed_shipments = len(at_risk_data)
-on_time_shipments = max(total_shipments - delayed_shipments, 0)
+if total_shipments > 0:
+    df_kpis = pd.DataFrame(live_data)
+    # Prefer categorical field
+    cat_field = "ai_category" if "ai_category" in df_kpis.columns else ("ai_status" if "ai_status" in df_kpis.columns else None)
+    if cat_field:
+        delayed_shipments = int((df_kpis[cat_field].fillna("Unknown") == "Delayed").sum())
+        on_time_shipments = int((df_kpis[cat_field].fillna("Unknown") == "On Time").sum())
+    else:
+        delayed_shipments = 0
+        on_time_shipments = 0
+else:
+    delayed_shipments = 0
+    on_time_shipments = 0
+
 delay_pct = (delayed_shipments / total_shipments * 100) if total_shipments > 0 else 0
 total_delays = sum(item.get("count", 0) for item in kpi_data)
 
@@ -212,7 +278,19 @@ st.markdown("### 🗺️ Global Shipment Tracking")
 
 if PLOTLY_AVAILABLE and live_data:
     df_map = pd.DataFrame(live_data)
-    # Ensure coordinates exist before plotting
+    # Normalize fields: prefer ai_text for human-friendly display, ai_category for color/filter
+    if 'ai_text' in df_map.columns:
+        df_map['ai_text'] = df_map['ai_text'].fillna('')
+    if 'ai_category' in df_map.columns:
+        df_map['ai_category'] = df_map['ai_category'].fillna('Unknown')
+    # For back-compat, keep ai_status as the display string
+    if 'ai_text' in df_map.columns:
+        df_map['ai_status'] = df_map['ai_text'].where(df_map['ai_text'] != '', df_map.get('ai_status'))
+    # Ensure correct dtypes and coordinates exist before plotting
+    if 'latitude' in df_map.columns:
+        df_map['latitude'] = pd.to_numeric(df_map['latitude'], errors='coerce')
+    if 'longitude' in df_map.columns:
+        df_map['longitude'] = pd.to_numeric(df_map['longitude'], errors='coerce')
     df_map = df_map.dropna(subset=['latitude', 'longitude']).copy()
 
     if not df_map.empty:
@@ -220,7 +298,10 @@ if PLOTLY_AVAILABLE and live_data:
         f1, f2 = st.columns(2)
         with f1:
             # Dynamically get statuses from data, including 'Unknown' if present
-            available_statuses = df_map["ai_status"].fillna("Unknown").unique()
+            # Prefer categorical field for filters
+            use_cat = "ai_category" in df_map.columns
+            base_for_filters = df_map["ai_category"] if use_cat else df_map["ai_status"]
+            available_statuses = base_for_filters.fillna("Unknown").unique()
             statuses_options = ["All"] + sorted([s for s in available_statuses])
             status_filter = st.multiselect("Filter by Status", statuses_options, default=["All"])
         with f2:
@@ -230,14 +311,18 @@ if PLOTLY_AVAILABLE and live_data:
         # Apply filters
         df_filtered = df_map.copy()
         if status_filter and "All" not in status_filter:
-            # Handle filtering for 'Unknown' (None/NaN) values
+            # Handle filtering for 'Unknown' (None/NaN) values on chosen field
+            if use_cat:
+                field = "ai_category"
+            else:
+                field = "ai_status"
             if "Unknown" in status_filter:
                 status_to_check = [s for s in status_filter if s != "Unknown"]
                 df_filtered = df_filtered[
-                    df_filtered["ai_status"].isin(status_to_check) | df_filtered["ai_status"].isna()
+                    df_filtered[field].isin(status_to_check) | df_filtered[field].isna()
                 ]
             else:
-                 df_filtered = df_filtered[df_filtered["ai_status"].isin(status_filter)]
+                 df_filtered = df_filtered[df_filtered[field].isin(status_filter)]
         if tracking_filter != "All":
             df_filtered = df_filtered[df_filtered["tracking_id"] == tracking_filter]
 
@@ -252,7 +337,8 @@ if PLOTLY_AVAILABLE and live_data:
             }
 
             # Replace None with "Unknown" for coloring and legend
-            df_filtered["ai_status_display"] = df_filtered["ai_status"].fillna("Unknown")
+            legend_series = df_filtered["ai_category"] if "ai_category" in df_filtered.columns else df_filtered["ai_status"]
+            df_filtered["ai_status_display"] = legend_series.fillna("Unknown")
 
             fig = px.scatter_geo(
                 df_filtered,
@@ -261,12 +347,12 @@ if PLOTLY_AVAILABLE and live_data:
                 hover_name="tracking_id",
                 hover_data={ # Customize hover data
                     "location": True,
-                    "ai_status_display": True,
+                    "ai_status_display": True,  # categorical
+                    "ai_status": True,          # human-friendly text
                     "timestamp": True,
                     "latitude": ':.4f', # Format coordinates
                     "longitude": ':.4f',
-                    "ai_status": False, # Hide original ai_status if needed
-                    "ai_status_display": False # Hide display version from default hover
+                    "ai_text": False
                 },
                 color="ai_status_display", # Use display version for color
                 color_discrete_map=color_map,
@@ -296,18 +382,22 @@ if PLOTLY_AVAILABLE and live_data:
             # --- Expandable Data Table ---
             with st.expander("🔍 View Detailed Map Data"):
                 # Select and rename columns for clarity in the table
-                display_cols = {
+             display_cols = {
                      "tracking_id": "Tracking ID",
                      "location": "Last Location",
-                     "ai_status_display": "Status",
+                 "ai_status": "AI Status",
+                 "ai_status_display": "Category",
                      "latitude": "Latitude",
                      "longitude": "Longitude",
                      "timestamp": "Timestamp"
                  }
-                df_display = df_filtered[display_cols.keys()].rename(columns=display_cols)
-                # Format timestamp for better readability
-                df_display["Timestamp"] = pd.to_datetime(df_display["Timestamp"]).dt.strftime('%Y-%m-%d %H:%M')
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
+            df_display = df_filtered[display_cols.keys()].rename(columns=display_cols)
+            # Robust timestamp formatting: handle mixed/invalid/with microseconds/timezone
+            ts_parsed = pd.to_datetime(df_display["Timestamp"], errors='coerce', utc=True)
+            # Drop timezone for display; coerce NaT to empty string
+            safe_str = ts_parsed.dt.tz_convert(None).dt.strftime('%Y-%m-%d %H:%M')
+            df_display["Timestamp"] = safe_str.replace('NaT', '')
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
         else:
             st.info("No shipments match the selected filters.")
     else:
@@ -397,9 +487,11 @@ with a2:
     st.markdown("<h4>Shipment Status Distribution</h4>", unsafe_allow_html=True)
     if live_data:
         df_live = pd.DataFrame(live_data)
-        if "ai_status" in df_live.columns and not df_live.empty:
+        # Prefer categorical for the distribution; fallback to ai_status
+        field = "ai_category" if "ai_category" in df_live.columns else ("ai_status" if "ai_status" in df_live.columns else None)
+        if field and not df_live.empty:
             # Get value counts, handling potential None/NaN
-            status_counts = df_live["ai_status"].fillna("Unknown").value_counts().reset_index()
+            status_counts = df_live[field].fillna("Unknown").value_counts().reset_index()
             status_counts.columns = ["Status", "Count"]
 
             # Define colors
