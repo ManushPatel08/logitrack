@@ -1,0 +1,71 @@
+name: Build and deploy backend & worker to Cloud Run
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  REGION: us-central1
+  ARTIFACT_REPO: logitrack-repo
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Setup gcloud CLI
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Configure Docker to use Artifact Registry
+      run: |
+        gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+    - name: Build and push backend image
+      run: |
+        IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/logitrack-backend:${{ github.sha }}
+        docker build -t $IMAGE ./backend
+        docker push $IMAGE
+      env:
+        REGION: ${{ env.REGION }}
+
+    - name: Deploy backend to Cloud Run
+      run: |
+        IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/logitrack-backend:${{ github.sha }}
+        gcloud run deploy logitrack-backend \
+          --image $IMAGE \
+          --platform managed \
+          --region ${{ env.REGION }} \
+          --allow-unauthenticated \
+          --set-secrets DATABASE_URL=${{ secrets.NEON_SECRET_NAME }}:latest \
+          --set-env-vars PORT=8080
+
+    - name: Build and push worker image
+      run: |
+        IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/logitrack-worker:${{ github.sha }}
+        docker build -t $IMAGE ./worker
+        docker push $IMAGE
+
+    - name: Deploy worker to Cloud Run
+      run: |
+        IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/logitrack-worker:${{ github.sha }}
+        gcloud run deploy logitrack-worker \
+          --image $IMAGE \
+          --platform managed \
+          --region ${{ env.REGION }} \
+          --no-allow-unauthenticated \
+          --concurrency 1 \
+          --set-secrets DATABASE_URL=${{ secrets.NEON_SECRET_NAME }}:latest

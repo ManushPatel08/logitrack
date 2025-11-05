@@ -51,7 +51,8 @@ AISSTREAM_WS_BOUNDING_BOXES = os.environ.get(
 )
 AISSTREAM_FILTER_MESSAGE_TYPES = os.environ.get(
     "AISSTREAM_FILTER_MESSAGE_TYPES",
-    "PositionReport"
+    # Include static data by default so we can enrich Destination
+    "PositionReport,ShipStaticData,StaticDataReport"
 )
 # Optional: provide full subscribe JSON via env; if set, we will send it verbatim
 AISSTREAM_WS_SUBSCRIBE_JSON = os.environ.get("AISSTREAM_WS_SUBSCRIBE_JSON", "")
@@ -110,6 +111,27 @@ def _categorize_from_nav_desc(text: str) -> str:
     if any(k in t for k in delayed_signals):
         return "Delayed"
     return "On Time"
+
+def _categorize_reason_from_nav_desc(text: str):
+    """Return (category, reason) inferred from nav status description.
+    Keeps KPIs meaningful even when AI paraphraser is unavailable.
+    """
+    t = (text or "").lower()
+    # Common delayed signals
+    if "anchor" in t or "moored" in t:
+        return ("Delayed", "Port Congestion")
+    if "aground" in t:
+        return ("Delayed", "Grounding")
+    if "restricted" in t:
+        return ("Delayed", "Restricted Maneuverability")
+    if "not under command" in t:
+        return ("Delayed", "Mechanical Issue")
+    if "constrained" in t:
+        return ("Delayed", "Draft Constraint")
+    if "search and rescue" in t or "sart" in t:
+        return ("Delayed", "SAR Operations")
+    # Default
+    return ("On Time", "N/A")
 
 
 def query_model(raw_text):
@@ -241,6 +263,28 @@ def backfill_null_ai_events(cursor, limit=1000):
     print(f"AI Backfill: heuristically labeled {count} events.")
     return count
 
+def backfill_missing_reasons(cursor, limit=5000):
+    """Fill ai_reason for rows that are currently Delayed but have no reason."""
+    cursor.execute(
+        "SELECT id, raw_status_text FROM shipment_events WHERE ai_status = 'Delayed' AND ai_reason IS NULL LIMIT %s;",
+        (limit,)
+    )
+    rows = cursor.fetchall()
+    if not rows:
+        return 0
+    count = 0
+    for event_id, raw_text in rows:
+        status, reason = _categorize_reason_from_nav_desc(raw_text)
+        # Keep status as-is (Delayed), only set reason
+        cursor.execute(
+            "UPDATE shipment_events SET ai_reason = %s WHERE id = %s",
+            (reason, event_id)
+        )
+        count += 1
+    if count:
+        print(f"AI Backfill: added reasons to {count} delayed events.")
+    return count
+
 # ==================== DATA INGESTION ====================
 
 def parse_ais_item(item):
@@ -362,6 +406,14 @@ def ingest_aisstream_data(cursor):
                 continue
 
             location = f"{parsed['vessel_name']} - Lat: {parsed['latitude']:.4f}, Lon: {parsed['longitude']:.4f}"
+            # Set origin once from first seen coordinates if still Unknown (minimal heuristic)
+            try:
+                cursor.execute(
+                    "UPDATE shipments SET origin=%s WHERE id=%s AND (origin IS NULL OR origin='Unknown')",
+                    (f"{parsed['latitude']:.2f},{parsed['longitude']:.2f}", shipment_id)
+                )
+            except Exception:
+                pass
             # Heuristic AI on insert to avoid Unknowns in UI
             ai_status, ai_reason = (None, None)
             if AI_HEURISTIC_ON_INSERT:
@@ -533,6 +585,10 @@ def _ws_extract_payload(msg):
     ship_name = pick(metadata, "ShipName", "ship_name", "name")
     if ship_name:
         norm["vessel_name"] = ship_name
+    # Destination sometimes appears in metadata even for position reports
+    dest_meta = pick(metadata, "Destination", "destination")
+    if isinstance(dest_meta, str) and dest_meta.strip():
+        norm["destination"] = dest_meta.strip()
     # NavigationalStatus from inner message
     if isinstance(inner, dict):
         nav_status = inner.get("NavigationalStatus")
@@ -664,6 +720,16 @@ def ingest_aisstream_ws(cursor, receive_seconds=30):
         mmsi = parsed.get("mmsi", "unknown")
         shipment_id = upsert_shipment(cursor, mmsi, origin="Unknown", destination="Unknown")
 
+        # If Destination is present in parsed payload, persist it
+        if parsed.get("destination") and parsed.get("destination") != "Unknown":
+            try:
+                cursor.execute(
+                    "UPDATE shipments SET destination = %s WHERE id = %s",
+                    (parsed["destination"], shipment_id)
+                )
+            except Exception as e:
+                print(f"Failed to set destination for {mmsi}: {e}")
+
         # Duplicate suppression (1 hour, same lat/lon)
         cursor.execute(
             "SELECT id FROM shipment_events WHERE shipment_id = %s AND latitude = %s AND longitude = %s AND timestamp > NOW() - INTERVAL '1 hour'",
@@ -673,8 +739,16 @@ def ingest_aisstream_ws(cursor, receive_seconds=30):
             continue
 
         location = f"{parsed['vessel_name']} - Lat: {parsed['latitude']:.4f}, Lon: {parsed['longitude']:.4f}"
-        # Set categorical status immediately to avoid Unknowns in UI; leave reason for paraphraser
-        ai_status, ai_reason = (_categorize_from_nav_desc(parsed["status_text"]), None)
+        # Set origin once from first seen coordinates if still Unknown (minimal heuristic)
+        try:
+            cursor.execute(
+                "UPDATE shipments SET origin=%s WHERE id=%s AND (origin IS NULL OR origin='Unknown')",
+                (f"{parsed['latitude']:.2f},{parsed['longitude']:.2f}", shipment_id)
+            )
+        except Exception:
+            pass
+        # Set categorical + initial reason immediately to avoid Unknowns; AI will paraphrase later
+        ai_status, ai_reason = _categorize_reason_from_nav_desc(parsed["status_text"])        
         cursor.execute(
             """
             INSERT INTO shipment_events
@@ -733,8 +807,7 @@ def ingest_mock_events(cursor):
 
     print(f"Adding mock event for {event['shipid']} to be processed by AI.")
 
-    # Insert the event with immediate categorical status to avoid Unknowns in UI
-    # Leave ai_reason as NULL so the AI paraphraser can fill it later
+    # Insert the event with immediate categorical status and coarse reason to avoid Unknowns in UI
     cursor.execute(
         """
         INSERT INTO shipment_events
@@ -748,8 +821,8 @@ def ingest_mock_events(cursor):
             event["raw_status_text"],
             event["latitude"],
             event["longitude"],
-            _categorize_from_nav_desc(event["raw_status_text"]),
-            None
+            _categorize_reason_from_nav_desc(event["raw_status_text"])[0],
+            _categorize_reason_from_nav_desc(event["raw_status_text"])[1]
         )
     )
 
@@ -781,6 +854,7 @@ def main():
     # Heuristic backfill to reduce 'Unknown' reasons for existing rows
     if AI_BACKFILL_HEURISTICS_ON_START:
         backfill_null_ai_events(cursor, limit=AI_BACKFILL_LIMIT)
+        backfill_missing_reasons(cursor, limit=max(1000, AI_BACKFILL_LIMIT))
 
     # Always run AI processing, regardless of mode.
     # This will process mock data (if USE_REAL_API=false)
