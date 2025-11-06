@@ -12,6 +12,14 @@ from models import DelayReasonKPI, Shipment, ShipmentEvent, ShipmentLiveLocation
 # --- FASTAPI APP ---
 app = FastAPI(title="LogiTrack AI API")
 
+# --- START BACKGROUND WORKER (if enabled) ---
+from background_worker import start_background_worker
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background worker on API startup."""
+    start_background_worker()
+
 # --- CONFIG: control mock visibility from env ---
 def _as_bool(val: str) -> bool:
     """Interpret common truthy strings as boolean True."""
