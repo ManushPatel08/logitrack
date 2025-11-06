@@ -19,10 +19,24 @@ from mock_data import ALL_MOCK_EVENTS
 load_dotenv()
 
 # --- DB Config ---
-DB_NAME = os.environ.get("POSTGRES_DB")
-DB_USER = os.environ.get("POSTGRES_USER")
-DB_PASS = os.environ.get("POSTGRES_PASSWORD")
-DB_HOST = "db"
+# Priority: DATABASE_URL (for cloud) > individual params (for Docker)
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL:
+    # Parse connection string for cloud deployment
+    import re
+    match = re.match(r'postgresql://([^:]+):([^@]+)@([^/]+)/(.+?)(\?.*)?$', DATABASE_URL)
+    if match:
+        DB_USER, DB_PASS, DB_HOST, DB_NAME = match.groups()[:4]
+        # Remove query params from DB_NAME
+        DB_NAME = DB_NAME.split('?')[0]
+    else:
+        raise ValueError("Invalid DATABASE_URL format")
+else:
+    # Fallback to individual params for Docker
+    DB_NAME = os.environ.get("POSTGRES_DB")
+    DB_USER = os.environ.get("POSTGRES_USER")
+    DB_PASS = os.environ.get("POSTGRES_PASSWORD")
+    DB_HOST = os.environ.get("POSTGRES_HOST", "db")
 
 # --- API Mode Flags ---
 # NOTE: We now default to AISStream when enabled; mock data is used otherwise.
