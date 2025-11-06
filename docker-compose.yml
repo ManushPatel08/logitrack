@@ -23,6 +23,9 @@ services:
     env_file:
       - .env
     environment:
+      # If you want to use a hosted DB like Neon, set DATABASE_URL in .env and it will be passed through
+      DATABASE_URL: ${DATABASE_URL}
+      SKIP_DB_SSL: ${SKIP_DB_SSL}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
@@ -52,6 +55,9 @@ services:
     depends_on:
       - db
     environment:
+      # Prefer passing a full DATABASE_URL (Neon) if present in .env
+      DATABASE_URL: ${DATABASE_URL}
+      SKIP_DB_SSL: ${SKIP_DB_SSL}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
